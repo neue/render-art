@@ -34,7 +34,69 @@ function resetSession(settings) {
  * @param {Object} settings
  * @return {Object|void}
  */
+
 function run(code, settings) {
+    var compiled;
+    var splitcode = code.split('\n');
+    // config = window.CONFIG;
+    code = preCompile(code || '');
+
+    // Reset session
+    resetSession(settings);
+    session.steps = [];
+
+    // Attempt compiling coffeescript
+    try {
+        compiled = coffee.compile(code || '', { sourceMap: true });
+    } catch (err) {
+        // Only warn in console if in debug mode
+        // if (config.DEBUG_LEVEL > 0 && !config.PRODUCTION) {
+        //     console.warn('[ Compile error ] ' +  err);
+        // }
+
+        return {
+            message : err.message,
+            type    : 'compilation'
+        };
+    }
+
+    // Evaluate compiled JavaScript in build context
+    try {
+        evalInContext.bind({})(compiled.js);
+    } catch (err) {
+        // Trace back error location from compiled source map
+        var jsLoc = getErrorLocation(err),
+            coffeeLoc = jsLoc ? compiled.sourceMap.sourceLocation(jsLoc) : null;
+
+        // Only warn in console if in debug mode
+        // if (config.DEBUG_LEVEL > 0 && !config.PRODUCTION) {
+        //     console.warn('[ API error ] ' + err);
+        // }
+        // return {
+        //     message : err.message,
+        //     loc     : coffeeLoc,
+        //     type    : 'execution'
+        // };
+        console.log(err);
+    }
+
+    if (coffeeLoc) {
+      console.log("Error on:"+coffeeLoc);          
+      splitcode[coffeeLoc[0]] = '#'+splitcode[coffeeLoc[0]];
+      fixedCode = splitcode.join('\n');
+      run(fixedCode, settings);
+    } else {
+      console.log("NO ERRORS");
+      fixedCode = splitcode.join('\n');
+      realRun(fixedCode, settings);
+    }
+    module.exports.cursorPosition = session.pos;
+}
+
+
+
+
+function realRun(code, settings) {
     var compiled;
 
     // config = window.CONFIG;
@@ -71,7 +133,7 @@ function run(code, settings) {
         // if (config.DEBUG_LEVEL > 0 && !config.PRODUCTION) {
         //     console.warn('[ API error ] ' + err);
         // }
-
+        console.log(coffeeLoc);
         return {
             message : err.message,
             loc     : coffeeLoc,
@@ -81,6 +143,10 @@ function run(code, settings) {
 
     module.exports.cursorPosition = session.pos;
 }
+
+
+
+
 
 /*
  * Precompile step - Cleans the code up
